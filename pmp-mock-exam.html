@@ -132,7 +132,7 @@ header p{color:var(--text2);font-size:12px}
 </div>
 <div class="vol-controls" id="vol-controls">
 <div class="vol-group"><span class="vol-icon">🔊</span><button class="vol-btn" onclick="adjVol('tts',-1)">−</button><span class="vol-val" id="vol-tts-val">80</span><button class="vol-btn" onclick="adjVol('tts',1)">+</button></div>
-<div class="vol-group"><span class="vol-icon">🎵</span><button class="vol-btn" onclick="adjVol('bgm',-1)">−</button><span class="vol-val" id="vol-bgm-val">2</span><button class="vol-btn" onclick="adjVol('bgm',1)">+</button><button class="vol-btn" onclick="toggleBgm()" id="bgm-toggle" style="font-size:11px;width:auto;padding:0 8px">OFF</button></div>
+<div class="vol-group"><span class="vol-icon">🎵</span><button class="vol-btn" onclick="toggleBgm()" id="bgm-toggle" style="font-size:11px;width:auto;padding:0 8px">OFF</button></div>
 </div>
 
 <div id="select-screen" class="screen active">
@@ -902,13 +902,7 @@ async function speakChunks(chunks,btn,onDone){
   }catch(e){alert('TTS Error: '+e.message+'\n\nAPIキーを確認してください。コンソールでclearApiKey()を実行すると再入力できます。');btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()}
 }
 // === Lofi BGM ===
-const LOFI_TRACKS=[
-  'https://archive.org/download/chill-lofi-music-relax-study/Leavv%20-%20Cloud%20Shapes.mp3',
-  'https://archive.org/download/chill-lofi-music-relax-study/Lilac%20-%20Florist.mp3',
-  'https://archive.org/download/chill-lofi-music-relax-study/Tom%20Doolie%20-%20Naoko.mp3',
-  'https://archive.org/download/chill-lofi-music-relax-study/Plant%20Guy%20-%20In%20Harmony%20With%20Nature.mp3',
-  'https://archive.org/download/chill-lofi-music-relax-study/Slo%20Loris%20-%20Riverside.mp3'
-];
+const BGM_SRC='bgm.mp3';
 let bgm=null,bgmOn=false;
 function toggleBgm(){
   bgmOn=!bgmOn;
@@ -917,12 +911,11 @@ function toggleBgm(){
 }
 function startBgm(){
   if(bgm||!bgmOn)return;
-  bgm=new Audio(LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)]);
-  bgm.volume=bgmVol/100;
-  bgm.onended=()=>{if(!bgm)return;bgm.src=LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)];bgm.volume=bgmVol/100;bgm.play().catch(()=>{})};
+  bgm=new Audio(BGM_SRC);
+  bgm.loop=true;
   bgm.play().catch(()=>{});
 }
-function stopBgm(){if(bgm){bgm.pause();bgm.onended=null;bgm=null}}
+function stopBgm(){if(bgm){bgm.pause();bgm=null}}
 
 function stopSpeaking(){
   speakingAll=false;

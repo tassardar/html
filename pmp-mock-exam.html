@@ -852,11 +852,15 @@ function getApiKey(){
 }
 function clearApiKey(){localStorage.removeItem('gcp_tts_key');alert('APIキーを削除しました')}
 let speakingAll=false,spkTimer=null,spkAudio=null,ttsGain=null;
+const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+let ttsGainNode=audioCtx.createGain();ttsGainNode.gain.value=0.8;ttsGainNode.connect(audioCtx.destination);
+let bgmGainNode=audioCtx.createGain();bgmGainNode.gain.value=0.06;bgmGainNode.connect(audioCtx.destination);
+
 let ttsVol=0.8,bgmVol=0.06;
 function adjVol(type,dir){
   const step=type==='bgm'?2:10;
-  if(type==='tts'){ttsVol=Math.min(100,Math.max(0,Math.round(ttsVol*100)+dir*step))/100;if(spkAudio&&spkAudio.volume!==undefined)spkAudio.volume=ttsVol;if(ttsGain)ttsGain.gain.value=ttsVol;document.getElementById('vol-tts-val').textContent=Math.round(ttsVol*100)}
-  else{bgmVol=Math.min(100,Math.max(0,Math.round(bgmVol*100)+dir*step))/100;if(bgm)bgm.volume=bgmVol;document.getElementById('vol-bgm-val').textContent=Math.round(bgmVol*100)}
+  if(type==='tts'){ttsVol=Math.min(100,Math.max(0,Math.round(ttsVol*100)+dir*step))/100;ttsGainNode.gain.value=ttsVol;document.getElementById('vol-tts-val').textContent=Math.round(ttsVol*100)}
+  else{bgmVol=Math.min(100,Math.max(0,Math.round(bgmVol*100)+dir*step))/100;bgmGainNode.gain.value=bgmVol;document.getElementById('vol-bgm-val').textContent=Math.round(bgmVol*100)}
 }
 function showVolControls(show){document.getElementById('vol-controls').classList.toggle('active',show)}
 function estSec(text){return Math.ceil(text.length/4.5)}
@@ -890,8 +894,11 @@ async function speakChunks(chunks,btn,onDone){
   try{
     const allText=chunks.join('。');
     const b64=await gcpSpeak(allText);
+    await audioCtx.resume();
     spkAudio=new Audio('data:audio/mp3;base64,'+b64);
-    spkAudio.volume=ttsVol;
+    spkAudio.crossOrigin='anonymous';
+    const src=audioCtx.createMediaElementSource(spkAudio);
+    src.connect(ttsGainNode);
     if('mediaSession' in navigator){
       navigator.mediaSession.metadata=new MediaMetadata({title:'PMP模擬試験',artist:'読み上げ中'});
       navigator.mediaSession.setActionHandler('pause',()=>stopSpeaking());
@@ -910,19 +917,21 @@ const LOFI_TRACKS=[
   'https://archive.org/download/chill-lofi-music-relax-study/Plant%20Guy%20-%20In%20Harmony%20With%20Nature.mp3',
   'https://archive.org/download/chill-lofi-music-relax-study/Slo%20Loris%20-%20Riverside.mp3'
 ];
-let bgm=null;
+let bgm=null,bgmSrc=null;
 function startBgm(){
   if(bgm)return;
   bgm=new Audio(LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)]);
-  bgm.volume=bgmVol;
-  bgm.onended=()=>{if(!bgm)return;bgm.src=LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)];bgm.volume=bgmVol;bgm.play().catch(()=>{})};
+  bgm.crossOrigin='anonymous';
+  bgmSrc=audioCtx.createMediaElementSource(bgm);
+  bgmSrc.connect(bgmGainNode);
+  bgm.onended=()=>{if(!bgm)return;bgm.src=LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)];bgm.play().catch(()=>{})};
   bgm.play().catch(()=>{});
 }
-function stopBgm(){if(bgm){bgm.pause();bgm.onended=null;bgm=null}}
+function stopBgm(){if(bgm){bgm.pause();bgm.onended=null;bgm=null;bgmSrc=null}}
 
 function stopSpeaking(){
   speakingAll=false;
-  if(spkAudio){spkAudio.pause();spkAudio=null}ttsGain=null;
+  if(spkAudio){spkAudio.pause();spkAudio=null}
   stopSpkProgress();stopBgm();showVolControls(false);
   document.querySelectorAll('.speak-btn').forEach(b=>b.classList.remove('speaking'));
 }
@@ -941,6 +950,7 @@ function speakFrom(idx){
 }
 function speakQuestion(idx){
   if(speakingAll){stopSpeaking();return}
+  audioCtx.resume();
   speakingAll=true;
   showVolControls(true);
   startBgm();

@@ -877,10 +877,34 @@ async function speakChunks(chunks,btn,onDone){
     spkAudio.play();
   }catch(e){alert('TTS Error: '+e.message);btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()}
 }
+// === 効果音（Web Audio API） ===
+const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+function playChime(){
+  const g=audioCtx.createGain();g.connect(audioCtx.destination);g.gain.setValueAtTime(0.3,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.6);
+  [523.25,659.25,783.99].forEach((f,i)=>{const o=audioCtx.createOscillator();o.type='sine';o.frequency.value=f;o.connect(g);o.start(audioCtx.currentTime+i*0.12);o.stop(audioCtx.currentTime+0.5+i*0.12)});
+}
+// === Lofi BGM ===
+const LOFI_TRACKS=[
+  'https://archive.org/download/chill-lofi-music-relax-study/Leavv%20-%20Cloud%20Shapes.mp3',
+  'https://archive.org/download/chill-lofi-music-relax-study/Lilac%20-%20Florist.mp3',
+  'https://archive.org/download/chill-lofi-music-relax-study/Tom%20Doolie%20-%20Naoko.mp3',
+  'https://archive.org/download/chill-lofi-music-relax-study/Plant%20Guy%20-%20In%20Harmony%20With%20Nature.mp3',
+  'https://archive.org/download/chill-lofi-music-relax-study/Slo%20Loris%20-%20Riverside.mp3'
+];
+let bgm=null;
+function startBgm(){
+  if(bgm)return;
+  bgm=new Audio(LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)]);
+  bgm.volume=0.02;bgm.loop=false;
+  bgm.onended=()=>{bgm.src=LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)];bgm.play()};
+  bgm.play().catch(()=>{});
+}
+function stopBgm(){if(bgm){bgm.pause();bgm=null}}
+
 function stopSpeaking(){
   speakingAll=false;
   if(spkAudio){spkAudio.pause();spkAudio=null}
-  stopSpkProgress();
+  stopSpkProgress();stopBgm();
   document.querySelectorAll('.speak-btn').forEach(b=>b.classList.remove('speaking'));
 }
 function speakFrom(idx){
@@ -892,11 +916,14 @@ function speakFrom(idx){
   const btn=document.querySelector('.speak-btn');
   btn&&btn.classList.add('speaking');
   startSpkProgress(totalSec);
-  speakChunks(chunks,btn,()=>{if(speakingAll)speakFrom(idx+1)});
+  if(idx>0){playChime();setTimeout(()=>{if(speakingAll)speakChunks(chunks,btn,()=>{if(speakingAll)setTimeout(()=>speakFrom(idx+1),1000)})},1500)}
+  else{speakChunks(chunks,btn,()=>{if(speakingAll)setTimeout(()=>speakFrom(idx+1),1000)})}
 }
 function speakQuestion(idx){
   if(speakingAll){stopSpeaking();return}
+  audioCtx.resume();
   speakingAll=true;
+  startBgm();
   speakFrom(idx);
 }
 const TIME_PER_Q=76;
@@ -980,7 +1007,7 @@ function startTimer(){
 
 function buildNav(){
   const c=document.getElementById('nav-dots');c.innerHTML='';
-  QS.forEach((_,i)=>{const d=document.createElement('div');d.className='nav-dot'+(i===0?' current':'');d.textContent=i+1;d.onclick=()=>{if(results[i]!==undefined||i===curQ)showQuestion(i)};c.appendChild(d)});
+  QS.forEach((_,i)=>{const d=document.createElement('div');d.className='nav-dot'+(i===0?' current':'');d.textContent=i+1;d.onclick=()=>{if(speakingAll){if(spkAudio){spkAudio.pause();spkAudio=null}stopSpkProgress();speakFrom(i)}else showQuestion(i)};c.appendChild(d)});
 }
 function updateNav(){document.querySelectorAll('.nav-dot').forEach((d,i)=>{d.className='nav-dot';if(i===curQ)d.classList.add('current');if(results[i]===true)d.classList.add('answered-correct');else if(results[i]===false)d.classList.add('answered-wrong')})}
 function updateStreak(){const el=document.getElementById('streak-bar');const t=Object.keys(results).length;if(streak>=3)el.innerHTML=`🔥 <span>${streak}問連続正解！</span>`;else if(t>0)el.innerHTML=`正解率: <span>${cTotal}/${t}</span> (${Math.round(cTotal/t*100)}%)`;else el.innerHTML=''}

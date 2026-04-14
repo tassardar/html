@@ -834,25 +834,20 @@ questions: [
 <script>
 let curSet=-1,curQ=0,answers={},results={},timerInt,timeLeft=0,streak=0,cTotal=0,wTotal=0,isDark=false,QS=[];
 
-function getJaVoice(){
-  const v=speechSynthesis.getVoices().filter(x=>x.lang.startsWith('ja'));
-  return v.find(x=>/Google/i.test(x.name))
-    ||v.find(x=>/O-Ren|Kyoko|Otoya|Hattori/i.test(x.name)&&/Premium|Enhanced/i.test(x.name))
-    ||v.find(x=>/O-Ren|Hattori/i.test(x.name))
-    ||v.find(x=>/Premium|Enhanced|Natural/i.test(x.name))
-    ||v.find(x=>!x.localService)
-    ||v[0]||null;
+function getApiKey(){
+  let k=localStorage.getItem('gcp_tts_key');
+  if(!k){k=prompt('Google Cloud TTS APIキーを入力してください（localStorageに保存されます）');if(k)localStorage.setItem('gcp_tts_key',k)}
+  return k;
 }
-let speakingAll=false,spkTimer=null;
-function estSec(text){return Math.ceil(text.length/5.5)}
+function clearApiKey(){localStorage.removeItem('gcp_tts_key');alert('APIキーを削除しました')}
+let speakingAll=false,spkTimer=null,spkAudio=null;
+function estSec(text){return Math.ceil(text.length/4.5)}
 function startSpkProgress(totalSec){
   clearInterval(spkTimer);
   let elapsed=0;
   const pg=document.getElementById('speak-progress'),fill=document.getElementById('speak-fill'),tm=document.getElementById('speak-time');
   if(!pg)return;
   pg.classList.add('active');
-  const vc=getJaVoice();
-  pg.title=vc?vc.name:'default';
   const update=()=>{const rem=Math.max(totalSec-elapsed,0);fill.style.width=`${Math.min(elapsed/totalSec*100,100)}%`;tm.textContent=`${rem}s`};
   update();
   spkTimer=setInterval(()=>{elapsed++;update();if(elapsed>=totalSec)clearInterval(spkTimer)},1000);
@@ -862,17 +857,34 @@ function stopSpkProgress(){
   const pg=document.getElementById('speak-progress');
   if(pg)pg.classList.remove('active');
 }
-function speakChunks(chunks,btn,onDone){
-  if(!chunks.length){btn&&btn.classList.remove('speaking');stopSpkProgress();if(onDone)onDone();return}
-  const u=new SpeechSynthesisUtterance(chunks[0]);
-  u.lang='ja-JP';u.rate=1.0;u.pitch=1.0;
-  const v=getJaVoice();if(v)u.voice=v;
-  u.onend=()=>speakChunks(chunks.slice(1),btn,onDone);
-  u.onerror=()=>{btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()};
-  speechSynthesis.speak(u);
+async function gcpSpeak(text){
+  const key=getApiKey();if(!key)throw new Error('No API key');
+  const r=await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${key}`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({input:{text},voice:{languageCode:'ja-JP',name:'ja-JP-Neural2-B'},audioConfig:{audioEncoding:'MP3',speakingRate:1.05}})
+  });
+  if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'TTS error')}
+  const d=await r.json();
+  return 'data:audio/mp3;base64,'+d.audioContent;
+}
+async function speakChunks(chunks,btn,onDone){
+  if(!chunks.length||!speakingAll){btn&&btn.classList.remove('speaking');stopSpkProgress();if(onDone)onDone();return}
+  try{
+    const src=await gcpSpeak(chunks[0]);
+    spkAudio=new Audio(src);
+    spkAudio.onended=()=>speakChunks(chunks.slice(1),btn,onDone);
+    spkAudio.onerror=()=>{btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()};
+    spkAudio.play();
+  }catch(e){alert('TTS Error: '+e.message);btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()}
+}
+function stopSpeaking(){
+  speakingAll=false;
+  if(spkAudio){spkAudio.pause();spkAudio=null}
+  stopSpkProgress();
+  document.querySelectorAll('.speak-btn').forEach(b=>b.classList.remove('speaking'));
 }
 function speakFrom(idx){
-  if(idx>=QS.length){speakingAll=false;stopSpkProgress();return}
+  if(idx>=QS.length||!speakingAll){stopSpeaking();return}
   showQuestion(idx);
   const q=QS[idx],ans=q.o[q.a].replace(/^[A-D]\.\s*/,'');
   const chunks=[`${q.q}`,`正解は、${ans}。`,`解説です。${q.e}`];
@@ -883,8 +895,7 @@ function speakFrom(idx){
   speakChunks(chunks,btn,()=>{if(speakingAll)speakFrom(idx+1)});
 }
 function speakQuestion(idx){
-  const ss=window.speechSynthesis;
-  if(ss.speaking||speakingAll){ss.cancel();speakingAll=false;stopSpkProgress();document.querySelectorAll('.speak-btn').forEach(b=>b.classList.remove('speaking'));return}
+  if(speakingAll){stopSpeaking();return}
   speakingAll=true;
   speakFrom(idx);
 }
@@ -915,7 +926,7 @@ function showModal(title,msg,buttons){
 function hideModal(){document.getElementById('modal-overlay').classList.remove('show')}
 
 function switchScreen(id){
-  speechSynthesis.cancel();speakingAll=false;stopSpkProgress();
+  stopSpeaking();
   ['select-screen','exam-screen','result-screen'].forEach(s=>document.getElementById(s).classList.remove('active'));
   document.getElementById(id).classList.add('active');
   document.getElementById('home-btn').style.display=id==='select-screen'?'none':'inline-block';
@@ -1028,8 +1039,6 @@ function showResults(){
   QS.forEach((q,i)=>{const ic=results[i];const ua=answers[i]!==undefined?q.o[answers[i]]:'未回答';rl.innerHTML+=`<div class="review-item" onclick="this.querySelector('.explanation').classList.toggle('show')"><div class="ri-header"><span style="color:var(--text2)">問${i+1} [${q.d}]</span><span class="ri-status ${ic?'ri-correct':'ri-wrong'}">${ic?'✓ 正解':'✗ 不正解'}</span></div><p style="margin:5px 0;font-size:13px">${q.q.substring(0,70)}...</p>${!ic?`<p style="font-size:11px;color:var(--correct)">正解: ${q.o[q.a]}</p>`:''}<div class="explanation"><strong>解説:</strong> ${q.e}${q.g&&q.g.length?'<div class="glossary"><div class="glossary-title">📖 用語解説</div>'+q.g.map(g=>`<div class="glossary-item"><span class="term">${g.t}:</span> <span class="def">${g.d}</span></div>`).join('')+'</div>':''}</div></div>`});
 }
 
-speechSynthesis.getVoices();
-speechSynthesis.onvoiceschanged=()=>speechSynthesis.getVoices();
 showMenu();
 </script>
 </body>

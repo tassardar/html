@@ -8,7 +8,7 @@
 :root{--bg:#f5f5f5;--bg2:#fff;--bg3:#e8e8e8;--text:#222;--text2:#666;--border:#ddd;--card:#fff;--accent:#e68a00;--accent2:#cc7a00;--correct:#2e7d32;--wrong:#c62828;--exp-bg:#fff8e1;--shadow:0 2px 8px rgba(0,0,0,.06)}
 [data-theme="dark"]{--bg:#0a0a1a;--bg2:#111122;--bg3:#1a1a2e;--text:#e0e0e0;--text2:#999;--border:#1a1a2e;--card:#111122;--accent:#ff9900;--accent2:#ffb84d;--correct:#4caf50;--wrong:#f44336;--exp-bg:#0d1b2a;--shadow:0 2px 8px rgba(0,0,0,.3)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Meiryo,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .3s,color .3s}
+body{font-family:'Segoe UI',Meiryo,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .3s,color .3s;-webkit-overflow-scrolling:touch;overscroll-behavior:none}
 .container{max-width:900px;margin:0 auto;padding:16px}
 .top-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 0;margin-bottom:4px;position:relative;z-index:10}
 .home-btn{background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--text);transition:all .2s;display:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
@@ -87,7 +87,7 @@ header p{color:var(--text2);font-size:12px}
 .streak-bar{text-align:center;padding:5px;font-size:12px;color:var(--text2)}
 .streak-bar span{color:var(--accent);font-weight:700}
 .set-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin:8px 0;cursor:pointer;transition:all .15s;box-shadow:var(--shadow);-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;position:relative;z-index:1}
-.set-card:hover,.set-card:active{border-color:var(--accent);transform:translateY(-1px)}
+.set-card:hover,.set-card:active{border-color:var(--accent)}
 .set-card h3{color:var(--accent);margin-bottom:5px;font-size:15px;pointer-events:none}
 .set-card p{color:var(--text2);font-size:12px;margin-bottom:6px;pointer-events:none}
 .set-card .meta{display:flex;gap:12px;font-size:11px;color:var(--text2);flex-wrap:wrap;pointer-events:none}
@@ -109,6 +109,10 @@ header p{color:var(--text2);font-size:12px}
 .speak-btn{background:var(--accent);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;transition:all .2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;flex-shrink:0}
 .speak-btn:hover{background:var(--accent2);transform:scale(1.1)}
 .speak-btn.speaking{animation:pulse 1s infinite;background:var(--wrong)}
+.vol-controls{display:none;align-items:center;gap:8px;padding:6px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;font-size:11px;color:var(--text2);flex-wrap:wrap}
+.vol-controls.active{display:flex}
+.vol-controls label{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.vol-controls input[type=range]{width:80px;height:4px;accent-color:var(--accent)}
 .speak-progress{display:none;align-items:center;gap:6px;margin-top:4px;font-size:10px;color:var(--text2);width:120px}
 .speak-progress.active{display:flex}
 .speak-progress .bar{flex:1;height:3px;background:var(--bg3);border-radius:2px;overflow:hidden}
@@ -122,6 +126,10 @@ header p{color:var(--text2);font-size:12px}
 <div class="top-bar">
 <button class="home-btn" id="home-btn" onclick="confirmHome()">← ホーム</button>
 <div class="theme-toggle" onclick="toggleTheme()" title="テーマ切替">☀️</div>
+</div>
+<div class="vol-controls" id="vol-controls">
+<label>🔊音声 <input type="range" id="vol-tts" min="0" max="100" value="80" oninput="setTtsVol(this.value)"></label>
+<label>🎵BGM <input type="range" id="vol-bgm" min="0" max="100" value="6" oninput="setBgmVol(this.value)"></label>
 </div>
 
 <div id="select-screen" class="screen active">
@@ -840,7 +848,11 @@ function getApiKey(){
   return k;
 }
 function clearApiKey(){localStorage.removeItem('gcp_tts_key');alert('APIキーを削除しました')}
-let speakingAll=false,spkTimer=null,spkAudio=null;
+let speakingAll=false,spkTimer=null,spkAudio=null,ttsGain=null;
+let ttsVol=0.8,bgmVol=0.06;
+function setTtsVol(v){ttsVol=v/100;if(ttsGain)ttsGain.gain.value=ttsVol}
+function setBgmVol(v){bgmVol=v/100;if(bgmGain)bgmGain.gain.value=bgmVol}
+function showVolControls(show){document.getElementById('vol-controls').classList.toggle('active',show)}
 function estSec(text){return Math.ceil(text.length/4.5)}
 function startSpkProgress(totalSec){
   clearInterval(spkTimer);
@@ -872,9 +884,16 @@ async function speakChunks(chunks,btn,onDone){
   try{
     const src=await gcpSpeak(chunks[0]);
     spkAudio=new Audio(src);
-    spkAudio.onended=()=>speakChunks(chunks.slice(1),btn,onDone);
+    spkAudio.crossOrigin='anonymous';
+    const source=audioCtx.createMediaElementSource(spkAudio);
+    ttsGain=audioCtx.createGain();ttsGain.gain.value=ttsVol;
+    source.connect(ttsGain);ttsGain.connect(audioCtx.destination);
+    const next=()=>{spkAudio=null;ttsGain=null;speakChunks(chunks.slice(1),btn,onDone)};
+    spkAudio.onended=next;
     spkAudio.onerror=()=>{btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()};
-    spkAudio.play();
+    await audioCtx.resume();
+    const p=spkAudio.play();
+    if(p)p.catch(()=>{});
   }catch(e){alert('TTS Error: '+e.message);btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()}
 }
 // === 効果音（Web Audio API） ===
@@ -891,20 +910,23 @@ const LOFI_TRACKS=[
   'https://archive.org/download/chill-lofi-music-relax-study/Plant%20Guy%20-%20In%20Harmony%20With%20Nature.mp3',
   'https://archive.org/download/chill-lofi-music-relax-study/Slo%20Loris%20-%20Riverside.mp3'
 ];
-let bgm=null;
+let bgm=null,bgmGain=null,bgmSource=null;
 function startBgm(){
   if(bgm)return;
   bgm=new Audio(LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)]);
-  bgm.volume=0.02;bgm.loop=false;
+  bgm.crossOrigin='anonymous';
   bgm.onended=()=>{bgm.src=LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)];bgm.play()};
+  bgmSource=audioCtx.createMediaElementSource(bgm);
+  bgmGain=audioCtx.createGain();bgmGain.gain.value=bgmVol;
+  bgmSource.connect(bgmGain);bgmGain.connect(audioCtx.destination);
   bgm.play().catch(()=>{});
 }
-function stopBgm(){if(bgm){bgm.pause();bgm=null}}
+function stopBgm(){if(bgm){bgm.pause();bgm=null;bgmSource=null;bgmGain=null}}
 
 function stopSpeaking(){
   speakingAll=false;
-  if(spkAudio){spkAudio.pause();spkAudio=null}
-  stopSpkProgress();stopBgm();
+  if(spkAudio){spkAudio.pause();spkAudio=null}ttsGain=null;
+  stopSpkProgress();stopBgm();showVolControls(false);
   document.querySelectorAll('.speak-btn').forEach(b=>b.classList.remove('speaking'));
 }
 function speakFrom(idx){
@@ -923,14 +945,11 @@ function speakQuestion(idx){
   if(speakingAll){stopSpeaking();return}
   audioCtx.resume();
   speakingAll=true;
+  showVolControls(true);
   startBgm();
   speakFrom(idx);
 }
 const TIME_PER_Q=76;
-let touchStartY=0,touchMoved=false;
-document.addEventListener('touchstart',function(e){touchStartY=e.touches[0].clientY;touchMoved=false},{passive:true});
-document.addEventListener('touchmove',function(e){if(Math.abs(e.touches[0].clientY-touchStartY)>10)touchMoved=true},{passive:true});
-function isTap(){return !touchMoved}
 
 function toggleTheme(){isDark=!isDark;document.documentElement.setAttribute('data-theme',isDark?'dark':'light');document.querySelector('.theme-toggle').textContent=isDark?'🌙':'☀️'}
 
@@ -967,7 +986,7 @@ function showMenu(){switchScreen('select-screen');clearInterval(timerInt);
     const div=document.createElement('div');
     div.className='set-card';
     div.innerHTML=`<h3>${s.name}</h3><p>${s.desc}</p><div class="meta"><span>📝 ${s.questions.length}問</span><span>⏱ ${Math.ceil(s.questions.length*TIME_PER_Q/60)}分</span>${hsHtml}</div>`;
-    div.addEventListener('click',function(){if(isTap())startExam(i)});
+    div.addEventListener('click',function(){startExam(i)});
     sl.appendChild(div);
   });
 }
@@ -1045,7 +1064,7 @@ function showQuestion(idx){
   updateNav();updateStreak();
 }
 
-function selectOpt(qi,oi){if(!isTap()||results[qi]!==undefined)return;answers[qi]=oi;const ic=oi===QS[qi].a;results[qi]=ic;if(ic){cTotal++;streak++}else{wTotal++;streak=0}showQuestion(qi)}
+function selectOpt(qi,oi){if(results[qi]!==undefined)return;answers[qi]=oi;const ic=oi===QS[qi].a;results[qi]=ic;if(ic){cTotal++;streak++}else{wTotal++;streak=0}showQuestion(qi)}
 function prevQ(){if(curQ>0)showQuestion(curQ-1)}
 function nextQ(){if(curQ<QS.length-1)showQuestion(curQ+1)}
 

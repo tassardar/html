@@ -855,7 +855,7 @@ let speakingAll=false,spkTimer=null,spkAudio=null,ttsGain=null;
 let ttsVol=0.8,bgmVol=0.06;
 function adjVol(type,dir){
   const step=type==='bgm'?2:10;
-  if(type==='tts'){ttsVol=Math.min(100,Math.max(0,Math.round(ttsVol*100)+dir*step))/100;if(ttsGain)ttsGain.gain.value=ttsVol;document.getElementById('vol-tts-val').textContent=Math.round(ttsVol*100)}
+  if(type==='tts'){ttsVol=Math.min(100,Math.max(0,Math.round(ttsVol*100)+dir*step))/100;if(spkAudio&&spkAudio.volume!==undefined)spkAudio.volume=ttsVol;if(ttsGain)ttsGain.gain.value=ttsVol;document.getElementById('vol-tts-val').textContent=Math.round(ttsVol*100)}
   else{bgmVol=Math.min(100,Math.max(0,Math.round(bgmVol*100)+dir*step))/100;if(bgmGain)bgmGain.gain.value=bgmVol;document.getElementById('vol-bgm-val').textContent=Math.round(bgmVol*100)}
 }
 function showVolControls(show){document.getElementById('vol-controls').classList.toggle('active',show)}
@@ -883,21 +883,29 @@ async function gcpSpeak(text){
   });
   if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'TTS error')}
   const d=await r.json();
-  const bin=atob(d.audioContent),buf=new Uint8Array(bin.length);
+  return d.audioContent;
+}
+function b64toBlob(b64){
+  const bin=atob(b64),buf=new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
-  return audioCtx.decodeAudioData(buf.buffer);
+  return new Blob([buf],{type:'audio/mp3'});
 }
 async function speakChunks(chunks,btn,onDone){
   if(!chunks.length||!speakingAll){btn&&btn.classList.remove('speaking');stopSpkProgress();if(onDone)onDone();return}
   try{
-    await audioCtx.resume();
-    const abuf=await gcpSpeak(chunks[0]);
-    const src=audioCtx.createBufferSource();src.buffer=abuf;
-    ttsGain=audioCtx.createGain();ttsGain.gain.value=ttsVol;
-    src.connect(ttsGain);ttsGain.connect(audioCtx.destination);
-    spkAudio=src;
-    src.onended=()=>{spkAudio=null;ttsGain=null;if(speakingAll)speakChunks(chunks.slice(1),btn,onDone)};
-    src.start(0);
+    const allText=chunks.join('。');
+    const b64=await gcpSpeak(allText);
+    const url=URL.createObjectURL(b64toBlob(b64));
+    spkAudio=new Audio(url);
+    spkAudio.volume=ttsVol;
+    if('mediaSession' in navigator){
+      navigator.mediaSession.metadata=new MediaMetadata({title:'PMP模擬試験',artist:'読み上げ中'});
+      navigator.mediaSession.setActionHandler('pause',()=>stopSpeaking());
+      navigator.mediaSession.setActionHandler('play',()=>{if(spkAudio)spkAudio.play()});
+    }
+    spkAudio.onended=()=>{URL.revokeObjectURL(url);spkAudio=null;if(onDone)onDone()};
+    spkAudio.onerror=()=>{btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()};
+    await spkAudio.play();
   }catch(e){alert('TTS Error: '+e.message);btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()}
 }
 // === 効果音（Web Audio API） ===
@@ -929,7 +937,7 @@ function stopBgm(){if(bgm){bgm.pause();bgm=null;bgmSource=null;bgmGain=null}}
 
 function stopSpeaking(){
   speakingAll=false;
-  if(spkAudio){try{spkAudio.stop()}catch(e){}spkAudio=null}ttsGain=null;
+  if(spkAudio){spkAudio.pause();spkAudio=null}ttsGain=null;
   stopSpkProgress();stopBgm();showVolControls(false);
   document.querySelectorAll('.speak-btn').forEach(b=>b.classList.remove('speaking'));
 }
@@ -937,7 +945,7 @@ function speakFrom(idx){
   if(idx>=QS.length||!speakingAll){stopSpeaking();return}
   showQuestion(idx);
   const q=QS[idx],ans=q.o[q.a].replace(/^[A-D]\.\s*/,'');
-  const chunks=[`${q.q}`,`正解は、${ans}。`,`解説です。${q.e}`];
+  const chunks=[`${q.q}`,`正解は、${ans}`,`解説です。${q.e}`];
   const totalSec=estSec(chunks.join(''));
   const btn=document.querySelector('.speak-btn');
   btn&&btn.classList.add('speaking');

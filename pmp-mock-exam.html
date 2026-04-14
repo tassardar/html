@@ -851,16 +851,13 @@ function getApiKey(){
   return k;
 }
 function clearApiKey(){localStorage.removeItem('gcp_tts_key');alert('APIキーを削除しました')}
-let speakingAll=false,spkTimer=null,spkAudio=null,ttsGain=null;
-const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-let ttsGainNode=audioCtx.createGain();ttsGainNode.gain.value=0.8;ttsGainNode.connect(audioCtx.destination);
-let bgmGainNode=audioCtx.createGain();bgmGainNode.gain.value=0.06;bgmGainNode.connect(audioCtx.destination);
-
-let ttsVol=0.8,bgmVol=0.06;
+let speakingAll=false,spkTimer=null,spkAudio=null;
+let ttsVol=80,bgmVol=6,ttsDb=0;
+function volToDb(v){return (v-80)*0.3}
 function adjVol(type,dir){
   const step=type==='bgm'?2:10;
-  if(type==='tts'){ttsVol=Math.min(100,Math.max(0,Math.round(ttsVol*100)+dir*step))/100;ttsGainNode.gain.value=ttsVol;document.getElementById('vol-tts-val').textContent=Math.round(ttsVol*100)}
-  else{bgmVol=Math.min(100,Math.max(0,Math.round(bgmVol*100)+dir*step))/100;bgmGainNode.gain.value=bgmVol;document.getElementById('vol-bgm-val').textContent=Math.round(bgmVol*100)}
+  if(type==='tts'){ttsVol=Math.min(100,Math.max(0,ttsVol+dir*step));ttsDb=volToDb(ttsVol);document.getElementById('vol-tts-val').textContent=ttsVol}
+  else{bgmVol=Math.min(30,Math.max(0,bgmVol+dir*step));if(bgm)bgm.volume=bgmVol/100;document.getElementById('vol-bgm-val').textContent=bgmVol}
 }
 function showVolControls(show){document.getElementById('vol-controls').classList.toggle('active',show)}
 function estSec(text){return Math.ceil(text.length/4.5)}
@@ -883,7 +880,7 @@ async function gcpSpeak(text){
   const key=getApiKey();if(!key)throw new Error('No API key');
   const r=await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${key}`,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({input:{text},voice:{languageCode:'ja-JP',name:'ja-JP-Neural2-B'},audioConfig:{audioEncoding:'MP3',speakingRate:1.05}})
+    body:JSON.stringify({input:{text},voice:{languageCode:'ja-JP',name:'ja-JP-Neural2-B'},audioConfig:{audioEncoding:'MP3',speakingRate:1.05,volumeGainDb:ttsDb}})
   });
   if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'TTS error')}
   const d=await r.json();
@@ -894,11 +891,7 @@ async function speakChunks(chunks,btn,onDone){
   try{
     const allText=chunks.join('。');
     const b64=await gcpSpeak(allText);
-    await audioCtx.resume();
     spkAudio=new Audio('data:audio/mp3;base64,'+b64);
-    spkAudio.crossOrigin='anonymous';
-    const src=audioCtx.createMediaElementSource(spkAudio);
-    src.connect(ttsGainNode);
     if('mediaSession' in navigator){
       navigator.mediaSession.metadata=new MediaMetadata({title:'PMP模擬試験',artist:'読み上げ中'});
       navigator.mediaSession.setActionHandler('pause',()=>stopSpeaking());
@@ -917,17 +910,15 @@ const LOFI_TRACKS=[
   'https://archive.org/download/chill-lofi-music-relax-study/Plant%20Guy%20-%20In%20Harmony%20With%20Nature.mp3',
   'https://archive.org/download/chill-lofi-music-relax-study/Slo%20Loris%20-%20Riverside.mp3'
 ];
-let bgm=null,bgmSrc=null;
+let bgm=null;
 function startBgm(){
   if(bgm)return;
   bgm=new Audio(LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)]);
-  bgm.crossOrigin='anonymous';
-  bgmSrc=audioCtx.createMediaElementSource(bgm);
-  bgmSrc.connect(bgmGainNode);
+  bgm.volume=bgmVol/100;
   bgm.onended=()=>{if(!bgm)return;bgm.src=LOFI_TRACKS[Math.floor(Math.random()*LOFI_TRACKS.length)];bgm.play().catch(()=>{})};
   bgm.play().catch(()=>{});
 }
-function stopBgm(){if(bgm){bgm.pause();bgm.onended=null;bgm=null;bgmSrc=null}}
+function stopBgm(){if(bgm){bgm.pause();bgm.onended=null;bgm=null}}
 
 function stopSpeaking(){
   speakingAll=false;
@@ -950,7 +941,6 @@ function speakFrom(idx){
 }
 function speakQuestion(idx){
   if(speakingAll){stopSpeaking();return}
-  audioCtx.resume();
   speakingAll=true;
   showVolControls(true);
   startBgm();

@@ -894,9 +894,13 @@ function concatBytes(arrays){const total=arrays.reduce((s,a)=>s+a.length,0);cons
 let qTimestamps=[],spkStartIdx=0;
 
 function seekToQuestion(targetIdx){
-  if(!spkAudio||!qTimestamps.length)return;
+  if(!spkAudio||!qTimestamps.length){
+    stopSpeaking();speakingAll=true;showVolControls(true);startBgm();prepareAndPlay(targetIdx);return;
+  }
   const entry=qTimestamps.find(t=>t.idx===targetIdx);
-  if(!entry)return;
+  if(!entry){
+    stopSpeaking();speakingAll=true;showVolControls(true);startBgm();prepareAndPlay(targetIdx);return;
+  }
   spkAudio.currentTime=entry.startTime;
   showQuestion(targetIdx);
 }

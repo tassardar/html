@@ -878,7 +878,7 @@ async function gcpSpeak(text){
   const key=getApiKey();if(!key)throw new Error('No API key');
   const r=await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${key}`,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({input:{text},voice:{languageCode:'ja-JP',name:'ja-JP-Neural2-B'},audioConfig:{audioEncoding:'MP3',speakingRate:1.05}})
+    body:JSON.stringify({input:{ssml:text},voice:{languageCode:'ja-JP',name:'ja-JP-Neural2-B'},audioConfig:{audioEncoding:'MP3',speakingRate:1.05}})
   });
   if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'TTS error')}
   const d=await r.json();
@@ -887,7 +887,7 @@ async function gcpSpeak(text){
 let ttsCache={};
 function buildText(idx){
   const q=QS[idx],ans=q.o[q.a].replace(/^[A-D]\.\s*/,'');
-  return `${q.q}。正解は、${ans}。解説です。${q.e}`;
+  return `<speak>問題${idx+1}番。<break time="0.5s"/>${q.q}<break time="1.5s"/>正解は、${ans}。<break time="1.5s"/>解説です。${q.e}</speak>`;
 }
 async function prefetch(idx){
   if(idx>=QS.length||ttsCache[idx])return;

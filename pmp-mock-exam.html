@@ -139,7 +139,7 @@ header p{color:var(--text2);font-size:12px}
 <div class="exam-banner"><span class="icon">📅</span> PMP試験は通年受験可能（CBT方式）。ピアソンVUEで随時予約できます。申込から1年以内に受験が必要です。</div>
 <header>
 <h1>🎯 PMP 模擬試験</h1>
-<p>PMBOK 7th Edition / ECO 2021 — People 42% | Process 50% | Business Environment 8%<br><span style="font-size:10px;color:var(--text2)">v2.1 | 最終更新: 2026-04-15 11:52</span></p>
+<p>PMBOK 7th Edition / ECO 2021 — People 42% | Process 50% | Business Environment 8%<br><span style="font-size:10px;color:var(--text2)">v2.1 | 最終更新: 2026-04-15 15:09</span></p>
 </header>
 <div class="card" style="text-align:center">
 <h2 style="color:var(--accent);margin-bottom:6px;font-size:18px">問題セットを選択</h2>
@@ -880,87 +880,93 @@ async function gcpSpeak(ssml){
   return (await r.json()).audioContent;
 }
 
-function buildSSML(idx){
+function buildSSML(idx,isFirst){
   const q=QS[idx],ans=q.o[q.a].replace(/^[A-D]\.\s*/,'');
-  return `<speak>問題${idx+1}番。<break time="0.5s"/>${q.q}<break time="1.5s"/>正解は、${ans}。<break time="1.5s"/>解説です。${q.e}</speak>`;
+  const pre=isFirst?'':'<break time="3s"/>';
+  return `<speak>${pre}問題${idx+1}番。<break time="0.5s"/>${q.q}<break time="1.5s"/>正解は、${ans}。<break time="1.5s"/>解説です。${q.e}</speak>`;
 }
-
-const CHIME_B64='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8Bx6qvs3a+nsjf6v8n/d++n/7/o/v6fUGVUJVykETCJMdC0Sd+WGloCCcjY0ZlJ+8mA6tib16/BheiTm4rGRPmAEFw0hFh3LiltztlHZ2+r9O7pm7f1fqf//Sy2j9qEEAANbbbSNuTRoNEVDjAsA0sCOAaDHkM8oIEgUDf/7UsRYAgl8KwUuf2SBG4VgWb9okBZeAyP0Qhu5hRIBoXmVHUF2L2n/o/r/en9lfT/J2I7P6gBaICKjYUBBgkOmIB8ZJRJrLKGIeoYRiRwYcZuuJ1GHVkABlqQ7WYFcCqHb8mUbAUyFhBedLxljzznba0KSSo1/q/2/utt9H7N3/7Xd2r1qAAAAA+/8bUlNLYs6qsRyCZ7gAb8B6bZWqYTJQeUjGY0hIAwobMFfqW3xM7ejQ2jSl209II/b/ut/+z///f/V+gVKAAWWAAFMDhAw//tSxGyAB8AlLaNtgvE9hZ+Zz+iQkLzF5+M4dcwUlI7MpAAzzDc09AwSkbTM5zJSDA8wRc6XAw7cRGhkWggUzcd5KN1lg8WGLUjZuUL/9X+Y/nvq0ezv////ogAAN5kWHqT3BgIYSNmTJRxPiaOV/pgXkbmYzVyY+a4J22CDGN0FOclQZoSChSGrTpNcpT1SNg16lW760//f//nf2a3f/cru/qMIHDLYKwn7ImFECGY0YgxphIIHVyEWdZwq5r4J3nqNbmZFQNxzKaYoAGMhqmj/+1LEg4IICCUTrHcEoUIFXpnP6JBaNnDEJfYzr169PT0lTCwCAIGeq95v///0fnV//u//ogEpQAC+qYgULwMkGNYp8xsavosZPHeaO0YaxF0bttETN0dhjBJjAbsoosNcprz/P9Go1TU1MCrlA0DIKgqCs9zpERfip2j/LUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7UsSZAgkQKPUt+0SBNQfcga9sWFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tSxKwDyPw24m33RIAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=';
-const chimeBytes=b64toBytes(CHIME_B64);
 
 function b64toBytes(b64){const bin=atob(b64);const buf=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);return buf}
 function concatBytes(arrays){const total=arrays.reduce((s,a)=>s+a.length,0);const r=new Uint8Array(total);let off=0;arrays.forEach(a=>{r.set(a,off);off+=a.length});return r}
+function bytesToB64(bytes){let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));return btoa(s)}
 
 let qTimestamps=[],spkStartIdx=0;
 
 function seekToQuestion(targetIdx){
-  if(!spkAudio||!qTimestamps.length){
-    stopSpeaking();speakingAll=true;showVolControls(true);startBgm();prepareAndPlay(targetIdx);return;
-  }
+  if(!spkAudio||!qTimestamps.length)return;
   const entry=qTimestamps.find(t=>t.idx===targetIdx);
-  if(!entry){
-    stopSpeaking();speakingAll=true;showVolControls(true);startBgm();prepareAndPlay(targetIdx);return;
+  if(entry){
+    spkAudio.currentTime=entry.startTime;
+    showQuestion(targetIdx);
   }
-  spkAudio.currentTime=entry.startTime;
-  showQuestion(targetIdx);
 }
 
 async function prepareAndPlay(startIdx){
   const btn=document.querySelector('.speak-btn');
   btn&&btn.classList.add('speaking');
   btn&&(btn.textContent='⏳');
-  const mp3Parts=[];qTimestamps=[];spkStartIdx=startIdx;
+  const parts=[];qTimestamps=[];spkStartIdx=startIdx;
   for(let i=startIdx;i<QS.length;i++){
     if(!speakingAll)return;
     try{
-      const b64=await gcpSpeak(buildSSML(i));
-      const bytes=b64toBytes(b64);
-      if(i>startIdx)mp3Parts.push({idx:-1,bytes:chimeBytes});
-      mp3Parts.push({idx:i,bytes});
+      const b64=await gcpSpeak(buildSSML(i,i===startIdx));
+      parts.push({idx:i,b64,len:b64.length});
     }catch(e){
       if(i===startIdx){alert('TTS Error: '+e.message);stopSpeaking();return}
       break;
     }
     btn&&(btn.textContent=`⏳${i-startIdx+1}/${QS.length-startIdx}`);
   }
-  if(!speakingAll||!mp3Parts.length)return;
+  if(!speakingAll||!parts.length)return;
   btn&&(btn.textContent='🔊');
-  const merged=concatBytes(mp3Parts.map(p=>p.bytes));
-  const blob=new Blob([merged],{type:'audio/mpeg'});
-  const url=URL.createObjectURL(blob);
-  showQuestion(startIdx);
-  spkAudio=new Audio(url);
-  spkAudio.volume=ttsVol/100;
 
-  await new Promise(r=>{spkAudio.addEventListener('loadedmetadata',r);spkAudio.addEventListener('error',r);spkAudio.load()});
-  const dur=spkAudio.duration||0;
+  // Concatenate MP3 bytes
+  const allBytes=parts.map(p=>b64toBytes(p.b64));
+  const merged=concatBytes(allBytes);
+  const dataUrl='data:audio/mpeg;base64,'+bytesToB64(merged);
+
+  // Build timestamps from byte ratios
   const totalBytes=merged.length;
   let cumBytes=0;
-  mp3Parts.forEach(p=>{
-    if(p.idx>=0)qTimestamps.push({idx:p.idx,startTime:(cumBytes/totalBytes)*dur});
-    cumBytes+=p.bytes.length;
+
+  showQuestion(startIdx);
+  spkAudio=new Audio(dataUrl);
+  spkAudio.volume=ttsVol/100;
+
+  // Use canplaythrough to ensure duration is ready
+  await new Promise(r=>{
+    spkAudio.addEventListener('canplaythrough',r,{once:true});
+    spkAudio.addEventListener('error',r,{once:true});
+    spkAudio.load();
+    setTimeout(r,5000);
   });
 
-  // Progress bar using real duration
-  clearInterval(spkTimer);
-  spkTimer=setInterval(updateProgress,500);
+  const dur=isFinite(spkAudio.duration)?spkAudio.duration:0;
+  allBytes.forEach((bytes,i)=>{
+    qTimestamps.push({idx:parts[i].idx,startTime:dur>0?(cumBytes/totalBytes)*dur:0});
+    cumBytes+=bytes.length;
+  });
 
+  // Progress + question tracking via ontimeupdate
   let currentQIdx=startIdx;
   spkAudio.ontimeupdate=()=>{
-    if(!spkAudio||!qTimestamps.length)return;
+    if(!spkAudio)return;
+    updateProgress();
+    if(!qTimestamps.length)return;
     let qIdx=currentQIdx;
     for(let i=qTimestamps.length-1;i>=0;i--){
       if(spkAudio.currentTime>=qTimestamps[i].startTime){qIdx=qTimestamps[i].idx;break}
     }
     if(qIdx!==currentQIdx){currentQIdx=qIdx;showQuestion(qIdx)}
   };
+
   if('mediaSession' in navigator){
-    navigator.mediaSession.metadata=new MediaMetadata({title:'PMP模擬試験',artist:`問題${startIdx+1}〜${QS.length}`});
+    navigator.mediaSession.metadata=new MediaMetadata({title:'PMP模擬試験',artist:`問題${startIdx+1}〜${startIdx+parts.length}`});
     navigator.mediaSession.setActionHandler('pause',()=>{if(spkAudio)spkAudio.pause()});
     navigator.mediaSession.setActionHandler('play',()=>{if(spkAudio)spkAudio.play()});
   }
-  spkAudio.onended=()=>{URL.revokeObjectURL(url);spkAudio=null;stopSpeaking()};
-  spkAudio.onerror=()=>{URL.revokeObjectURL(url);stopSpeaking()};
+  spkAudio.onended=()=>{spkAudio=null;stopSpeaking()};
+  spkAudio.onerror=()=>{stopSpeaking()};
   await spkAudio.play();
 }
 
@@ -983,7 +989,7 @@ function stopBgm(){if(bgm){bgm.pause();bgm=null}}
 function stopSpeaking(){
   speakingAll=false;
   if(spkAudio){spkAudio.pause();spkAudio=null}
-  clearInterval(spkTimer);stopSpkProgress();stopBgm();showVolControls(false);
+  stopSpkProgress();stopBgm();showVolControls(false);
   document.querySelectorAll('.speak-btn').forEach(b=>{b.classList.remove('speaking');b.textContent='🔊'});
 }
 
@@ -1071,7 +1077,7 @@ function startTimer(){
 
 function buildNav(){
   const c=document.getElementById('nav-dots');c.innerHTML='';
-  QS.forEach((_,i)=>{const d=document.createElement('div');d.className='nav-dot'+(i===0?' current':'');d.textContent=i+1;d.onclick=()=>{if(speakingAll&&spkAudio){seekToQuestion(i)}else showQuestion(i)};c.appendChild(d)});
+  QS.forEach((_,i)=>{const d=document.createElement('div');d.className='nav-dot'+(i===0?' current':'');d.textContent=i+1;d.onclick=()=>{if(speakingAll){const e=qTimestamps.find(t=>t.idx===i);if(e&&spkAudio){spkAudio.currentTime=e.startTime;showQuestion(i)}else{stopSpeaking();speakingAll=true;showVolControls(true);prepareAndPlay(i)}}else showQuestion(i)};c.appendChild(d)});
 }
 function updateNav(){document.querySelectorAll('.nav-dot').forEach((d,i)=>{d.className='nav-dot';if(i===curQ)d.classList.add('current');if(results[i]===true)d.classList.add('answered-correct');else if(results[i]===false)d.classList.add('answered-wrong')})}
 function updateStreak(){const el=document.getElementById('streak-bar');const t=Object.keys(results).length;if(streak>=3)el.innerHTML=`🔥 <span>${streak}問連続正解！</span>`;else if(t>0)el.innerHTML=`正解率: <span>${cTotal}/${t}</span> (${Math.round(cTotal/t*100)}%)`;else el.innerHTML=''}

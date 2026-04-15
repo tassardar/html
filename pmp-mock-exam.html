@@ -893,7 +893,14 @@ async function prefetch(idx){
   if(idx>=QS.length||ttsCache[idx])return;
   try{ttsCache[idx]=await gcpSpeak(buildText(idx))}catch(e){}
 }
-function playChime(){new Audio('chime.mp3').play().catch(()=>{})}
+function playChime(){
+  return new Promise(r=>{
+    const a=new Audio('chime.mp3');
+    a.onended=r;a.onerror=r;
+    a.play().catch(r);
+    setTimeout(r,2000);
+  });
+}
 function delay(ms){return new Promise(r=>setTimeout(r,ms))}
 async function gcpSpeakRetry(text,retries){
   for(let i=0;i<=retries;i++){
@@ -902,7 +909,6 @@ async function gcpSpeakRetry(text,retries){
 }
 async function speakFrom(idx){
   if(idx>=QS.length||!speakingAll){stopSpeaking();return}
-  if(idx>0)playChime();
   showQuestion(idx);
   const text=buildText(idx);
   const totalSec=estSec(text);
@@ -913,6 +919,8 @@ async function speakFrom(idx){
     const b64=ttsCache[idx]||(await gcpSpeakRetry(text,2));
     ttsCache[idx]=null;
     prefetch(idx+1);
+    if(idx>0&&speakingAll)await playChime();
+    if(!speakingAll)return;
     spkAudio=new Audio('data:audio/mp3;base64,'+b64);
     spkAudio.volume=ttsVol/100;
     if('mediaSession' in navigator){

@@ -892,23 +892,36 @@ function b64toBytes(b64){const bin=atob(b64);const buf=new Uint8Array(bin.length
 function concatBytes(arrays){const total=arrays.reduce((s,a)=>s+a.length,0);const r=new Uint8Array(total);let off=0;arrays.forEach(a=>{r.set(a,off);off+=a.length});return r}
 function bytesToB64(bytes){let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));return btoa(s)}
 
-let qTimestamps=[];
+let qTimestamps=[],spkStartIdx=0;
+
+function seekToQuestion(targetIdx){
+  if(!spkAudio||!qTimestamps.length)return;
+  const entry=qTimestamps.find(t=>t.idx===targetIdx);
+  if(!entry)return;
+  spkAudio.currentTime=entry.startTime;
+  showQuestion(targetIdx);
+}
+
+let chimeBytes=null;
+async function loadChime(){
+  if(chimeBytes)return;
+  try{const r=await fetch('chime.mp3');if(r.ok)chimeBytes=new Uint8Array(await r.arrayBuffer())}catch(e){}
+}
 
 async function prepareAndPlay(startIdx){
   const btn=document.querySelector('.speak-btn');
   btn&&btn.classList.add('speaking');
   btn&&(btn.textContent='⏳');
-  const mp3Parts=[];qTimestamps=[];
-  let cumLen=0;
+  await loadChime();
+  const mp3Parts=[];qTimestamps=[];spkStartIdx=startIdx;
   for(let i=startIdx;i<QS.length;i++){
     if(!speakingAll)return;
     const ssml=`<speak>${buildSSML(i)}</speak>`;
     try{
       const b64=await gcpSpeak(ssml);
       const bytes=b64toBytes(b64);
-      qTimestamps.push({idx:i,byteOffset:cumLen});
-      mp3Parts.push(bytes);
-      cumLen+=bytes.length;
+      if(i>startIdx&&chimeBytes)mp3Parts.push({idx:-1,bytes:chimeBytes});
+      mp3Parts.push({idx:i,bytes});
     }catch(e){
       if(i===startIdx){alert('TTS Error: '+e.message);stopSpeaking();return}
       break;
@@ -917,29 +930,40 @@ async function prepareAndPlay(startIdx){
   }
   if(!speakingAll||!mp3Parts.length)return;
   btn&&(btn.textContent='🔊');
-  const merged=concatBytes(mp3Parts);
+  const merged=concatBytes(mp3Parts.map(p=>p.bytes));
   const dataUrl='data:audio/mp3;base64,'+bytesToB64(merged);
-  const totalSec=estSec(qTimestamps.map(t=>buildSSML(t.idx)).join(''));
   showQuestion(startIdx);
-  startSpkProgress(totalSec);
   spkAudio=new Audio(dataUrl);
   spkAudio.volume=ttsVol/100;
-  // Track current question by time
-  let currentQIdx=0;
+
+  // Wait for duration to be available, then build timestamps
+  await new Promise(r=>{
+    spkAudio.addEventListener('loadedmetadata',r);
+    spkAudio.addEventListener('error',r);
+    spkAudio.load();
+  });
+  const dur=spkAudio.duration||0;
+  const totalBytes=merged.length;
+  let cumBytes=0;
+  mp3Parts.forEach(p=>{
+    if(p.idx>=0)qTimestamps.push({idx:p.idx,startTime:(cumBytes/totalBytes)*dur});
+    cumBytes+=p.bytes.length;
+  });
+
+  startSpkProgress(Math.ceil(dur));
+
+  let currentQIdx=startIdx;
   spkAudio.ontimeupdate=()=>{
     if(!spkAudio||!qTimestamps.length)return;
-    const pct=spkAudio.currentTime/spkAudio.duration;
-    const bytePos=pct*qTimestamps[qTimestamps.length-1].byteOffset+(1-pct)*0;
-    // Estimate question index by equal time division
-    const qIdx=Math.min(Math.floor(spkAudio.currentTime/(spkAudio.duration/qTimestamps.length)),qTimestamps.length-1);
-    if(qIdx!==currentQIdx&&qIdx>=0){
-      currentQIdx=qIdx;
-      showQuestion(qTimestamps[qIdx].idx);
+    let qIdx=currentQIdx;
+    for(let i=qTimestamps.length-1;i>=0;i--){
+      if(spkAudio.currentTime>=qTimestamps[i].startTime){qIdx=qTimestamps[i].idx;break}
     }
+    if(qIdx!==currentQIdx){currentQIdx=qIdx;showQuestion(qIdx)}
   };
   if('mediaSession' in navigator){
-    navigator.mediaSession.metadata=new MediaMetadata({title:'PMP模擬試験',artist:`問題${startIdx+1}〜${QS.length}`});
-    navigator.mediaSession.setActionHandler('pause',()=>stopSpeaking());
+    navigator.mediaSession.metadata=new MediaMetadata({title:'PMP模擬試験',artist:`問題${startIdx+1}〜${startIdx+mp3Parts.length}`});
+    navigator.mediaSession.setActionHandler('pause',()=>{if(spkAudio)spkAudio.pause()});
     navigator.mediaSession.setActionHandler('play',()=>{if(spkAudio)spkAudio.play()});
   }
   spkAudio.onended=()=>{spkAudio=null;stopSpeaking()};
@@ -1054,7 +1078,7 @@ function startTimer(){
 
 function buildNav(){
   const c=document.getElementById('nav-dots');c.innerHTML='';
-  QS.forEach((_,i)=>{const d=document.createElement('div');d.className='nav-dot'+(i===0?' current':'');d.textContent=i+1;d.onclick=()=>{if(speakingAll){stopSpeaking();speakingAll=true;showVolControls(true);startBgm();prepareAndPlay(i)}else showQuestion(i)};c.appendChild(d)});
+  QS.forEach((_,i)=>{const d=document.createElement('div');d.className='nav-dot'+(i===0?' current':'');d.textContent=i+1;d.onclick=()=>{if(speakingAll&&spkAudio){seekToQuestion(i)}else showQuestion(i)};c.appendChild(d)});
 }
 function updateNav(){document.querySelectorAll('.nav-dot').forEach((d,i)=>{d.className='nav-dot';if(i===curQ)d.classList.add('current');if(results[i]===true)d.classList.add('answered-correct');else if(results[i]===false)d.classList.add('answered-wrong')})}
 function updateStreak(){const el=document.getElementById('streak-bar');const t=Object.keys(results).length;if(streak>=3)el.innerHTML=`🔥 <span>${streak}問連続正解！</span>`;else if(t>0)el.innerHTML=`正解率: <span>${cTotal}/${t}</span> (${Math.round(cTotal/t*100)}%)`;else el.innerHTML=''}

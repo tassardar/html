@@ -884,22 +884,39 @@ async function gcpSpeak(text){
   const d=await r.json();
   return d.audioContent;
 }
-async function speakChunks(chunks,btn,onDone){
-  if(!chunks.length||!speakingAll){btn&&btn.classList.remove('speaking');stopSpkProgress();if(onDone)onDone();return}
+let ttsCache={};
+function buildText(idx){
+  const q=QS[idx],ans=q.o[q.a].replace(/^[A-D]\.\s*/,'');
+  const pause=idx>0?'......。':'';
+  return `${pause}${q.q}。正解は、${ans}。解説です。${q.e}`;
+}
+async function prefetch(idx){
+  if(idx>=QS.length||ttsCache[idx])return;
+  try{ttsCache[idx]=await gcpSpeak(buildText(idx))}catch(e){}
+}
+async function speakFrom(idx){
+  if(idx>=QS.length||!speakingAll){stopSpeaking();return}
+  showQuestion(idx);
+  const text=buildText(idx);
+  const totalSec=estSec(text);
+  const btn=document.querySelector('.speak-btn');
+  btn&&btn.classList.add('speaking');
+  startSpkProgress(totalSec);
   try{
-    const allText=chunks.join('。');
-    const b64=await gcpSpeak(allText);
+    const b64=ttsCache[idx]||(await gcpSpeak(text));
+    ttsCache[idx]=null;
+    prefetch(idx+1);
     spkAudio=new Audio('data:audio/mp3;base64,'+b64);
     spkAudio.volume=ttsVol/100;
     if('mediaSession' in navigator){
-      navigator.mediaSession.metadata=new MediaMetadata({title:'PMP模擬試験',artist:'読み上げ中'});
+      navigator.mediaSession.metadata=new MediaMetadata({title:`PMP 問題${idx+1}/${QS.length}`,artist:'読み上げ中'});
       navigator.mediaSession.setActionHandler('pause',()=>stopSpeaking());
       navigator.mediaSession.setActionHandler('play',()=>{if(spkAudio)spkAudio.play()});
     }
-    spkAudio.onended=()=>{spkAudio=null;if(onDone)onDone()};
+    spkAudio.onended=()=>{spkAudio=null;if(speakingAll)speakFrom(idx+1)};
     spkAudio.onerror=()=>{btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()};
     await spkAudio.play();
-  }catch(e){alert('TTS Error: '+e.message+'\n\nAPIキーを確認してください。コンソールでclearApiKey()を実行すると再入力できます。');btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()}
+  }catch(e){alert('TTS Error: '+e.message);btn&&btn.classList.remove('speaking');speakingAll=false;stopSpkProgress()}
 }
 // === Lofi BGM ===
 const BGM_SRC='bgm.mp3';
@@ -918,24 +935,12 @@ function startBgm(){
 function stopBgm(){if(bgm){bgm.pause();bgm=null}}
 
 function stopSpeaking(){
-  speakingAll=false;
+  speakingAll=false;ttsCache={};
   if(spkAudio){spkAudio.pause();spkAudio=null}
   stopSpkProgress();stopBgm();showVolControls(false);
   document.querySelectorAll('.speak-btn').forEach(b=>b.classList.remove('speaking'));
 }
 
-function speakFrom(idx){
-  if(idx>=QS.length||!speakingAll){stopSpeaking();return}
-  showQuestion(idx);
-  const q=QS[idx],ans=q.o[q.a].replace(/^[A-D]\.\s*/,'');
-  const pause=idx>0?'......。':'';
-  const chunks=[`${pause}${q.q}。正解は、${ans}。解説です。${q.e}`];
-  const totalSec=estSec(chunks.join(''));
-  const btn=document.querySelector('.speak-btn');
-  btn&&btn.classList.add('speaking');
-  startSpkProgress(totalSec);
-  speakChunks(chunks,btn,()=>{if(speakingAll)speakFrom(idx+1)});
-}
 function speakQuestion(idx){
   if(speakingAll){stopSpeaking();return}
   speakingAll=true;

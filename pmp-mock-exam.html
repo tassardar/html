@@ -139,7 +139,7 @@ header p{color:var(--text2);font-size:12px}
 <div class="exam-banner"><span class="icon">📅</span> PMP試験は通年受験可能（CBT方式）。ピアソンVUEで随時予約できます。申込から1年以内に受験が必要です。</div>
 <header>
 <h1>🎯 PMP 模擬試験</h1>
-<p>PMBOK 7th Edition / ECO 2021 — People 42% | Process 50% | Business Environment 8%<br><span style="font-size:10px;color:var(--text2)">v2.1</span></p>
+<p>PMBOK 7th Edition / ECO 2021 — People 42% | Process 50% | Business Environment 8%<br><span style="font-size:10px;color:var(--text2)">v2.1 | 最終更新: 2026-04-15</span></p>
 </header>
 <div class="card" style="text-align:center">
 <h2 style="color:var(--accent);margin-bottom:6px;font-size:18px">問題セットを選択</h2>
@@ -887,15 +887,19 @@ async function gcpSpeak(text){
 let ttsCache={};
 function buildText(idx){
   const q=QS[idx],ans=q.o[q.a].replace(/^[A-D]\.\s*/,'');
-  const pause=idx>0?'......。':'';
-  return `${pause}${q.q}。正解は、${ans}。解説です。${q.e}`;
+  return `${q.q}。正解は、${ans}。解説です。${q.e}`;
 }
 async function prefetch(idx){
   if(idx>=QS.length||ttsCache[idx])return;
   try{ttsCache[idx]=await gcpSpeak(buildText(idx))}catch(e){}
 }
+function playChime(){
+  return new Promise(r=>{const a=new Audio('chime.mp3');a.onended=r;a.onerror=r;a.play().catch(r)});
+}
 async function speakFrom(idx){
   if(idx>=QS.length||!speakingAll){stopSpeaking();return}
+  if(idx>0)await playChime();
+  if(!speakingAll)return;
   showQuestion(idx);
   const text=buildText(idx);
   const totalSec=estSec(text);
